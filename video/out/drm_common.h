@@ -58,6 +58,7 @@ struct drm_opts {
     int drm_format;
     struct m_geometry drm_draw_surface_size;
     int drm_vrr_enabled;
+    int drm_send_hdr_meta;
 };
 
 struct drm_vsync_tuple {
