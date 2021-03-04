@@ -70,8 +70,9 @@ struct drm_object {
     drmModePropertyRes **props_info;
 };
 
-#define DRM_HAS_HDR_METADATA_INFOFFRAME
-#define DRM_HDMI_STATIC_METADATA_TYPE1 1
+#define DRM_HAS_HDR_METADATA_INFOFRAME
+// https://lists.freedesktop.org/archives/dri-devel/2021-January/295187.html
+#define DRM_HDMI_STATIC_METADATA_TYPE1 0
 
 #include "config.h"
 #if !HAVE_DRM_HDMI_HDR
@@ -79,7 +80,7 @@ struct drm_object {
 #endif
 
 struct drm_hdr_metadata {
-#ifdef DRM_HAS_HDR_METADATA_INFOFFRAME
+#ifdef DRM_HAS_HDR_METADATA_INFOFRAME
     struct hdr_output_metadata data;
     uint32_t blob_id;
 #endif

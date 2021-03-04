@@ -475,7 +475,7 @@ static uint32_t get_property_id(int fd, drmModeObjectProperties *props,
 
 
 void drm_send_hdrmeta(struct drm_atomic_context *ctx, struct mp_colorspace *color) {
-#ifdef DRM_HAS_HDR_METADATA_INFOFFRAME
+#ifdef DRM_HAS_HDR_METADATA_INFOFRAME
 
     uint32_t property_hdr_id = get_property_id(ctx->connector->fd, ctx->connector->props, "HDR_OUTPUT_METADATA");
     if(!property_hdr_id)
@@ -485,7 +485,7 @@ void drm_send_hdrmeta(struct drm_atomic_context *ctx, struct mp_colorspace *colo
     
     if(p->blob_id > 0)
         drmModeDestroyPropertyBlob(ctx->connector->fd, p->blob_id);
-    p->data.metadata_type = DRM_HDMI_STATIC_METADATA_TYPE1; // = 1
+    p->data.metadata_type = DRM_HDMI_STATIC_METADATA_TYPE1;
     p->data.hdmi_metadata_type1.metadata_type = DRM_HDMI_STATIC_METADATA_TYPE1;
     struct mp_csp_primaries colors = mp_get_csp_primaries(color->primaries);
 
@@ -552,7 +552,7 @@ void drm_send_hdrmeta(struct drm_atomic_context *ctx, struct mp_colorspace *colo
 
 // switch HDR off
 void drm_destroy_hdrmeta(struct drm_atomic_context *ctx) {
-#ifdef DRM_HAS_HDR_METADATA_INFOFFRAME
+#ifdef DRM_HAS_HDR_METADATA_INFOFRAME
     if (ctx->hdr_metadata.blob_id) {
         drmModeDestroyPropertyBlob(ctx->connector->fd, ctx->hdr_metadata.blob_id);
         drmModeAtomicReqPtr request = drmModeAtomicAlloc();
