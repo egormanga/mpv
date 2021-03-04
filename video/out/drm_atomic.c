@@ -473,6 +473,9 @@ static uint32_t get_property_id(int fd, drmModeObjectProperties *props,
     return id;
 }
 
+static uint16_t clamp16(float x) {
+    return (uint16_t)MPCLAMP(x, 0.0, 65535.0);
+}
 
 void drm_send_hdrmeta(struct drm_atomic_context *ctx, struct mp_colorspace *color) {
 #ifdef DRM_HAS_HDR_METADATA_INFOFRAME
@@ -514,40 +517,42 @@ void drm_send_hdrmeta(struct drm_atomic_context *ctx, struct mp_colorspace *colo
         float max_fall = color->sig_peak * 100.0;
         
         // Convert to 16-bit values in units of 0.00002, where 0x0000 represents zero and 0xC350 (50000) represents 1.0000
-        p->data.hdmi_metadata_type1.display_primaries[0].x = round(colors.red.x * 50000.0);
-        p->data.hdmi_metadata_type1.display_primaries[0].y = round(colors.red.y * 50000.0);
-        p->data.hdmi_metadata_type1.display_primaries[1].x = round(colors.green.x * 50000.0);
-        p->data.hdmi_metadata_type1.display_primaries[1].y = round(colors.green.y * 50000.0);
-        p->data.hdmi_metadata_type1.display_primaries[2].x = round(colors.blue.x * 50000.0);
-        p->data.hdmi_metadata_type1.display_primaries[2].y = round(colors.blue.y * 50000.0);
+        p->data.hdmi_metadata_type1.display_primaries[0].x = clamp16(roundf(colors.red.x * 50000.0));
+        p->data.hdmi_metadata_type1.display_primaries[0].y = clamp16(roundf(colors.red.y * 50000.0));
+        p->data.hdmi_metadata_type1.display_primaries[1].x = clamp16(roundf(colors.green.x * 50000.0));
+        p->data.hdmi_metadata_type1.display_primaries[1].y = clamp16(roundf(colors.green.y * 50000.0));
+        p->data.hdmi_metadata_type1.display_primaries[2].x = clamp16(roundf(colors.blue.x * 50000.0));
+        p->data.hdmi_metadata_type1.display_primaries[2].y = clamp16(roundf(colors.blue.y * 50000.0));
         // White point
-        p->data.hdmi_metadata_type1.white_point.x = round(colors.white.x * 50000.0);
-        p->data.hdmi_metadata_type1.white_point.y = round(colors.white.y * 50000.0);
+        p->data.hdmi_metadata_type1.white_point.x = clamp16(roundf(colors.white.x * 50000.0));
+        p->data.hdmi_metadata_type1.white_point.y = clamp16(roundf(colors.white.y * 50000.0));
 
         // Min Luminance: 16-bit value in units of 0.0001 cd/m2, where 0x0001 represents 0.0001 cd/m2 and 0xFFFF represents 6.5535 cd/m2.
-        if(min_luminance >= 0)
-            p->data.hdmi_metadata_type1.min_display_mastering_luminance = round(min_luminance * 10000.0);
+        p->data.hdmi_metadata_type1.min_display_mastering_luminance = clamp16(floorf(min_luminance * 10000.0));
 
         // Max Luminance: 16-bit value in units of 1 cd/m2, where 0x0001 represents 1 cd/m2 and 0xFFFF represents 65535 cd/m2.
-        if(max_luminance >= 0)
-            p->data.hdmi_metadata_type1.max_display_mastering_luminance = round(max_luminance);
+        p->data.hdmi_metadata_type1.max_display_mastering_luminance = clamp16(ceilf(max_luminance));
 
         // Max Content Light Level: 16-bit value in units of 1 cd/m2, where 0x0001 represents 1 cd/m2 and 0xFFFF represents 65535 cd/m2.
-        if (max_cll >= 0)
-            p->data.hdmi_metadata_type1.max_cll = round(max_cll);
+        p->data.hdmi_metadata_type1.max_cll = clamp16(ceilf(max_cll));
 
         // Max Frame Average Light Level: 16-bit value in units of 1 cd/m2, where 0x0001 represents 1 cd/m2 and 0xFFFF represents 65535 cd/m2.
-        if (max_fall >= 0)
-            p->data.hdmi_metadata_type1.max_fall = round(max_fall);
+        p->data.hdmi_metadata_type1.max_fall = clamp16(ceilf(max_fall));
+
+        printf("WSL: peak=%f min=%d max=%d cll=%d fall=%d\n",
+            color->sig_peak,
+            p->data.hdmi_metadata_type1.min_display_mastering_luminance,
+            p->data.hdmi_metadata_type1.max_display_mastering_luminance,
+            p->data.hdmi_metadata_type1.max_cll,
+            p->data.hdmi_metadata_type1.max_fall);
        
-       drmModeCreatePropertyBlob(ctx->connector->fd, &p->data, sizeof(p->data), &p->blob_id);
-       drmModeAtomicReqPtr request = drmModeAtomicAlloc();
-       if (!request)
+        drmModeCreatePropertyBlob(ctx->connector->fd, &p->data, sizeof(p->data), &p->blob_id);
+        drmModeAtomicReqPtr request = drmModeAtomicAlloc();
+        if (!request)
             return;
-       drmModeAtomicAddProperty(request, ctx->connector->id, property_hdr_id, p->blob_id);
-       drmModeAtomicCommit(ctx->connector->fd, request, DRM_MODE_ATOMIC_ALLOW_MODESET, NULL);
-//       printf("VVS: HDR status %d %d %d (HDR=%d b=%d) %.2f %.2f %.2f %.2f   %d %d %d\n", ret, ret1, ret2, property_hdr_id, p->blob_id, min_luminance, max_luminance, max_cll, max_fall, color->gamma, MP_CSP_TRC_PQ, MP_CSP_TRC_HLG);
-       drmModeAtomicFree(request);
+        drmModeAtomicAddProperty(request, ctx->connector->id, property_hdr_id, p->blob_id);
+        drmModeAtomicCommit(ctx->connector->fd, request, DRM_MODE_ATOMIC_ALLOW_MODESET, NULL);
+        drmModeAtomicFree(request);
     }
 
 #endif
