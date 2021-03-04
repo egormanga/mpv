@@ -488,6 +488,8 @@ void drm_send_hdrmeta(struct drm_atomic_context *ctx, struct mp_colorspace *colo
     
     if(p->blob_id > 0)
         drmModeDestroyPropertyBlob(ctx->connector->fd, p->blob_id);
+    p->blob_id = 0;
+
     p->data.metadata_type = DRM_HDMI_STATIC_METADATA_TYPE1;
     p->data.hdmi_metadata_type1.metadata_type = DRM_HDMI_STATIC_METADATA_TYPE1;
     struct mp_csp_primaries colors = mp_get_csp_primaries(color->primaries);
@@ -506,7 +508,7 @@ void drm_send_hdrmeta(struct drm_atomic_context *ctx, struct mp_colorspace *colo
         case MP_CSP_TRC_PQ: p->data.hdmi_metadata_type1.eotf = 2; break;
         case MP_CSP_TRC_HLG: p->data.hdmi_metadata_type1.eotf = 3; break;
         default: p->data.hdmi_metadata_type1.eotf = 0; break;		// default SDR
-     }
+    }
      
 
     if(p->data.hdmi_metadata_type1.eotf) {
@@ -539,13 +541,15 @@ void drm_send_hdrmeta(struct drm_atomic_context *ctx, struct mp_colorspace *colo
         // Max Frame Average Light Level: 16-bit value in units of 1 cd/m2, where 0x0001 represents 1 cd/m2 and 0xFFFF represents 65535 cd/m2.
         p->data.hdmi_metadata_type1.max_fall = clamp16(ceilf(max_fall));
 
+/*
         printf("WSL: peak=%f min=%d max=%d cll=%d fall=%d\n",
             color->sig_peak,
             p->data.hdmi_metadata_type1.min_display_mastering_luminance,
             p->data.hdmi_metadata_type1.max_display_mastering_luminance,
             p->data.hdmi_metadata_type1.max_cll,
             p->data.hdmi_metadata_type1.max_fall);
-       
+*/
+
         drmModeCreatePropertyBlob(ctx->connector->fd, &p->data, sizeof(p->data), &p->blob_id);
         drmModeAtomicReqPtr request = drmModeAtomicAlloc();
         if (!request)
@@ -563,11 +567,26 @@ void drm_destroy_hdrmeta(struct drm_atomic_context *ctx) {
 #ifdef DRM_HAS_HDR_METADATA_INFOFRAME
     if (ctx->hdr_metadata.blob_id) {
         drmModeDestroyPropertyBlob(ctx->connector->fd, ctx->hdr_metadata.blob_id);
+        ctx->hdr_metadata.blob_id = 0;
+
         drmModeAtomicReqPtr request = drmModeAtomicAlloc();
         if (!request)
              return;
+
+        // switch back to SDR
+        uint32_t property_hdr_id = get_property_id(ctx->connector->fd, ctx->connector->props, "HDR_OUTPUT_METADATA");
+
+        ctx->hdr_metadata.data.metadata_type = DRM_HDMI_STATIC_METADATA_TYPE1;
+        ctx->hdr_metadata.data.hdmi_metadata_type1.metadata_type = DRM_HDMI_STATIC_METADATA_TYPE1;
+        ctx->hdr_metadata.data.hdmi_metadata_type1.eotf = 0;           // SDR
+
+        drmModeCreatePropertyBlob(ctx->connector->fd, &ctx->hdr_metadata.data, sizeof(ctx->hdr_metadata.data), &ctx->hdr_metadata.blob_id);
+
+        drmModeAtomicAddProperty(request, ctx->connector->id, property_hdr_id, ctx->hdr_metadata.blob_id);
         drmModeAtomicCommit(ctx->connector->fd, request, DRM_MODE_ATOMIC_ALLOW_MODESET, NULL);
         drmModeAtomicFree(request);
+
+        drmModeDestroyPropertyBlob(ctx->connector->fd, ctx->hdr_metadata.blob_id);
         ctx->hdr_metadata.blob_id = 0;
      }
 #endif
