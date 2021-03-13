@@ -435,7 +435,7 @@ bool drm_mode_ensure_blob(int fd, struct drm_mode *mode)
     int ret = 0;
 
     if (!mode->blob_id) {
-        ret = drmModeCreatePropertyBlob(fd, &mode->mode, sizeof(drmModeModeInfo),
+        ret = drmModeCreatePropertyBlob(fd, &mode->mode, sizeof mode->mode,
                                         &mode->blob_id);
     }
 
@@ -473,7 +473,7 @@ static uint32_t get_property_id(int fd, drmModeObjectProperties *props,
     return id;
 }
 
-static uint16_t clamp16(float x) {
+static inline uint16_t clamp16(float x) {
     return (uint16_t)MPCLAMP(x, 0.0, 65535.0);
 }
 
@@ -494,7 +494,7 @@ void drm_send_hdrmeta(struct drm_atomic_context *ctx, struct mp_colorspace *colo
     p->data.hdmi_metadata_type1.metadata_type = DRM_HDMI_STATIC_METADATA_TYPE1;
     struct mp_csp_primaries colors = mp_get_csp_primaries(color->primaries);
 
-    /*		CTA‐861‐G says:
+    /*        CTA‐861‐G says:
                     EOTF        EOTF of stream
                     0           Traditional gamma - SDR Luminance Range
                     1           Traditional gamma - HDR Luminance Range
@@ -507,16 +507,15 @@ void drm_send_hdrmeta(struct drm_atomic_context *ctx, struct mp_colorspace *colo
         case MP_CSP_TRC_BT_1886: p->data.hdmi_metadata_type1.eotf = 1; break; // ???
         case MP_CSP_TRC_PQ: p->data.hdmi_metadata_type1.eotf = 2; break;
         case MP_CSP_TRC_HLG: p->data.hdmi_metadata_type1.eotf = 3; break;
-        default: p->data.hdmi_metadata_type1.eotf = 0; break;		// default SDR
+        default: p->data.hdmi_metadata_type1.eotf = 0; break;        // default SDR
     }
-     
 
     if(p->data.hdmi_metadata_type1.eotf) {
         // Convert to nits (cd/m2):
-        float min_luminance = 0;	// ??? Is it correct?
-        float max_luminance = color->sig_peak * 100.0;
-        float max_cll = color->sig_peak * 100.0;
-        float max_fall = color->sig_peak * 100.0;
+        float min_luminance = 0.0;
+        float max_luminance = color->sig_peak * MP_REF_WHITE;
+        float max_cll = max_luminance;
+        float max_fall = max_luminance;
         
         // Convert to 16-bit values in units of 0.00002, where 0x0000 represents zero and 0xC350 (50000) represents 1.0000
         p->data.hdmi_metadata_type1.display_primaries[0].x = clamp16(roundf(colors.red.x * 50000.0));
@@ -541,16 +540,16 @@ void drm_send_hdrmeta(struct drm_atomic_context *ctx, struct mp_colorspace *colo
         // Max Frame Average Light Level: 16-bit value in units of 1 cd/m2, where 0x0001 represents 1 cd/m2 and 0xFFFF represents 65535 cd/m2.
         p->data.hdmi_metadata_type1.max_fall = clamp16(ceilf(max_fall));
 
-/*
-        printf("WSL: peak=%f min=%d max=%d cll=%d fall=%d\n",
+        /*
+        printf("HDR: peak=%f min=%d max=%d cll=%d fall=%d\n",
             color->sig_peak,
             p->data.hdmi_metadata_type1.min_display_mastering_luminance,
             p->data.hdmi_metadata_type1.max_display_mastering_luminance,
             p->data.hdmi_metadata_type1.max_cll,
             p->data.hdmi_metadata_type1.max_fall);
-*/
+        */
 
-        drmModeCreatePropertyBlob(ctx->connector->fd, &p->data, sizeof(p->data), &p->blob_id);
+        drmModeCreatePropertyBlob(ctx->connector->fd, &p->data, sizeof p->data, &p->blob_id);
         drmModeAtomicReqPtr request = drmModeAtomicAlloc();
         if (!request)
             return;
@@ -580,7 +579,7 @@ void drm_destroy_hdrmeta(struct drm_atomic_context *ctx) {
         ctx->hdr_metadata.data.hdmi_metadata_type1.metadata_type = DRM_HDMI_STATIC_METADATA_TYPE1;
         ctx->hdr_metadata.data.hdmi_metadata_type1.eotf = 0;           // SDR
 
-        drmModeCreatePropertyBlob(ctx->connector->fd, &ctx->hdr_metadata.data, sizeof(ctx->hdr_metadata.data), &ctx->hdr_metadata.blob_id);
+        drmModeCreatePropertyBlob(ctx->connector->fd, &ctx->hdr_metadata.data, sizeof ctx->hdr_metadata.data, &ctx->hdr_metadata.blob_id);
 
         drmModeAtomicAddProperty(request, ctx->connector->id, property_hdr_id, ctx->hdr_metadata.blob_id);
         drmModeAtomicCommit(ctx->connector->fd, request, DRM_MODE_ATOMIC_ALLOW_MODESET, NULL);
