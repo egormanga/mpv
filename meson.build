@@ -908,6 +908,12 @@ endif
 # This can be removed roughly when Debian 12 is released.
 features += {'drm-is-kms': features['drm'] and drm.version().version_compare('>= 2.4.105')}
 
+drm_hdmi_hdr = get_option('drm-hdmi-hdr').require(
+    features['drm'] and drm.version().version_compare('>= 2.4.104'),
+    error_message: 'DRM HDMI HDR requirements not met.'
+)
+features += {'drm-hdmi-hdr': drm_hdmi_hdr.allowed()}
+
 gbm = dependency('gbm', version: '>=17.1.0', required: get_option('gbm'))
 features += {'gbm': gbm.found()}
 if features['gbm']
